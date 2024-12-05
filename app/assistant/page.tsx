@@ -75,7 +75,7 @@ export default function Assistant() {
     formData.append("image", selectedImage);
 
     try {
-      const imageResponse = await fetch("https://30de-2409-40f4-2040-f9b0-4531-e6c5-2cfe-2caf.ngrok-free.app/upload_image", {
+      const imageResponse = await fetch("https://8962-49-206-119-172.ngrok-free.app/upload_image", {
         method: "POST",
         body: formData,
       });
@@ -122,7 +122,7 @@ export default function Assistant() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("https://30de-2409-40f4-2040-f9b0-4531-e6c5-2cfe-2caf.ngrok-free.app/chat", {
+      const response = await fetch("https://8962-49-206-119-172.ngrok-free.app/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
