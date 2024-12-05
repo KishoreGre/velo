@@ -75,7 +75,7 @@ export default function Assistant() {
     formData.append("image", selectedImage);
 
     try {
-      const imageResponse = await fetch("http://127.0.0.1:4000/upload_image", {
+      const imageResponse = await fetch("https://8962-49-206-119-172.ngrok-free.app/upload_image", {
         method: "POST",
         body: formData,
       });
@@ -122,7 +122,7 @@ export default function Assistant() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://127.0.0.1:4000/chat", {
+      const response = await fetch("https://8962-49-206-119-172.ngrok-free.app/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
