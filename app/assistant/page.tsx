@@ -64,7 +64,7 @@ export default function Assistant() {
   // Start a new chat session
   const startNewChat = async () => {
     try {
-      const sessionResponse = await fetch("http://127.0.0.1:4000/start_session", {
+      const sessionResponse = await fetch("https://monarch-verified-directly.ngrok-free.app/start_session", {
         method: "GET",
       });
       
@@ -132,7 +132,7 @@ export default function Assistant() {
     formData.append("image", selectedImage);
 
     try {
-      const imageResponse = await fetch(`http://127.0.0.1:4000/upload_image/${currentChat.sessionId}`, {
+      const imageResponse = await fetch(`https://monarch-verified-directly.ngrok-free.app/upload_image/${currentChat.sessionId}`, {
         method: "POST",
         body: formData,
       });
@@ -184,7 +184,7 @@ export default function Assistant() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`http://127.0.0.1:4000/chat/${currentChat.sessionId}`, {
+      const response = await fetch(`https://monarch-verified-directly.ngrok-free.app/chat/${currentChat.sessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_answer: query }),
