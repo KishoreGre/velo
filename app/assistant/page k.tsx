@@ -5,8 +5,8 @@ import {
   Send,
   Menu as MenuIcon,
   X,
+  Image,
   Plus,
-  Search,
   History,
   Settings,
   MessageSquare,
@@ -23,9 +23,10 @@ export default function Assistant() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<"history" | "services">("history");
   const [chatHistory, setChatHistory] = useState<
-  { id: string; name: string; messages: { role: "user" | "assistant"; content: string }[] }[]
->([]);
-
+    { id: string; name: string; messages: { role: string; content: string }[] }[]
+  >([]);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [isImageProcessed, setIsImageProcessed] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
   // Scroll to bottom when messages change
@@ -39,32 +40,92 @@ export default function Assistant() {
 
   // Load chat history on mount
   useEffect(() => {
-  const savedChats = localStorage.getItem("chatHistory");
-  if (savedChats) {
-    const parsedChats = JSON.parse(savedChats) as typeof chatHistory;
-    setChatHistory(parsedChats);
-  }
-}, []);
-
-
+    const savedChats = localStorage.getItem("chatHistory");
+    if (savedChats) {
+      setChatHistory(JSON.parse(savedChats));
+    }
+    const savedMessages = localStorage.getItem("messages");
+    if (savedMessages) {
+      setMessages(JSON.parse(savedMessages));
+    }
+  }, []);
 
   // Save chat history whenever it changes
   useEffect(() => {
     localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
   }, [chatHistory]);
+  // Save messages whenever they change
+  useEffect(() => {
+    localStorage.setItem("messages", JSON.stringify(messages));
+  }, [messages]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Handle Image Selection
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0] && !isImageProcessed) {
+      setSelectedImage(e.target.files[0]);
+    }
+  };
+
+  // Handle Image Upload
+  const handleImageUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedImage) return;
+
+    const formData = new FormData();
+    formData.append("image", selectedImage);
+
+    try {
+      const imageResponse = await fetch("https://8962-49-206-119-172.ngrok-free.app/upload_image", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!imageResponse.ok) {
+        throw new Error(`Image upload failed with status: ${imageResponse.status}`);
+      }
+      // TODO: Get the image and prcess later in the frontend if needed.
+      // const imageData = await imageResponse.json();
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Image uploaded and processed successfully." },
+      ]);
+      setIsImageProcessed(true);
+    } catch (error) {
+      console.error("Image Upload Error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Sorry, there was an error uploading your image.",
+        },
+      ]);
+    }
+  };
+
+  // Handle Chat Submission
+  const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
 
+    type Payload = {
+      user_answer: string;
+    };
+    
+    const payload: Payload = {
+      user_answer: query,
+    };
+    
     setMessages((prev) => [...prev, { role: "user", content: query }]);
+    setQuery("");
+
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://127.0.0.1:4000/chat", {
+      const response = await fetch("https://8962-49-206-119-172.ngrok-free.app/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_answer: query }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -99,7 +160,6 @@ export default function Assistant() {
       ]);
     } finally {
       setIsLoading(false);
-      setQuery("");
     }
   };
 
@@ -113,13 +173,19 @@ export default function Assistant() {
     }
     setMessages([]);
     setQuery("");
+    setSelectedImage(null);
+    setIsImageProcessed(false);
   };
 
   const loadChat = (id: string) => {
     const chat = chatHistory.find((chat) => chat.id === id);
     if (chat) {
-      setMessages(chat.messages);
-    }                                                                                                                                                                               
+      const validMessages = chat.messages.map((message) => ({
+        role: message.role as "user" | "assistant",
+        content: message.content,
+      }));
+      setMessages(validMessages);
+    }
   };
 
   const deleteChat = (id: string) => {
@@ -139,7 +205,6 @@ export default function Assistant() {
 
   return (
     <div className="flex h-screen bg-black-50">
-      {/* Sidebar */}
       <div
         className={`${
           isSidebarOpen ? "w-64" : "w-0"
@@ -148,14 +213,13 @@ export default function Assistant() {
         <div className="p-4 border-b flex justify-between items-center">
           <h2 className="font-semibold text-lg">Assistant</h2>
           <button
-            onClick={() => setIsSidebarOpen(true)}
+            onClick={() => setIsSidebarOpen(false)}
             className="p-1 hover:bg-black-100 rounded"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* New Chat Button */}
         <button
           onClick={startNewChat}
           className="m-4 p-2 bg-red-500 text-white rounded-lg flex items-center gap-2 hover:bg-red-500"
@@ -164,7 +228,6 @@ export default function Assistant() {
           New Chat
         </button>
 
-        {/* Tabs */}
         <div className="flex border-b">
           <button
             onClick={() => setActiveTab("history")}
@@ -194,7 +257,6 @@ export default function Assistant() {
           </button>
         </div>
 
-        {/* Tab Content */}
         <div className="flex-1 overflow-y-auto p-4">
           {activeTab === "history" ? (
             <div className="space-y-2">
@@ -229,7 +291,6 @@ export default function Assistant() {
             </div>
           ) : (
             <div className="space-y-2">
-              {/* Example services */}
               <div className="p-2 hover:bg-black-100 rounded cursor-pointer">
                 <h3 className="font-medium">Vehicle Diagnostics</h3>
                 <p className="text-sm text-black-600">Check vehicle health</p>
@@ -243,9 +304,7 @@ export default function Assistant() {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Header */}
         <div className="bg-black border-b p-4 flex items-center gap-4">
           {!isSidebarOpen && (
             <button
@@ -258,7 +317,6 @@ export default function Assistant() {
           <h1 className="font-semibold">Vehicle Assistant</h1>
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((message, index) => (
             <div
@@ -283,18 +341,62 @@ export default function Assistant() {
             </div>
           ))}
           {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-Black shadow-sm border rounded-lg p-3">
-                Thinking...
-              </div>
+            <div className="flex justify-start items-center space-x-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-red"></div>
+            <div className="bg-black shadow-sm border rounded-lg p-3 text-white">
+              Let&apos;s Go..
             </div>
+
+          </div>
           )}
+          <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Form */}
-        <form onSubmit={handleSubmit} className="p-4 bg-black border-t">
-          <div className="flex gap-2 items-center">
-            <Search className="w-5 h-5 text-black-400" />
+        <div className="p-4 bg-black border-t flex flex-col gap-4">
+          <form onSubmit={handleImageUpload} className="flex gap-2 items-center">
+          {!isImageProcessed ? (
+              <>
+                <input
+                  type="file"
+                  accept="image/*"
+                  id="imageUpload"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="imageUpload"
+                  className={`p-2 rounded-lg cursor-pointer transition-colors flex items-center gap-2 
+                    ${!selectedImage 
+                      ? 'bg-blue-400 text-white' 
+                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                    }`}
+                >
+                  <Image className="w-5 h-5" />
+                  Choose File
+                </label>
+                {selectedImage && (
+                  <button
+                    type="submit"
+                    className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+                  >
+                    <Send className="w-5 h-5" />
+                    Upload Image
+                  </button>
+                )}
+              </>
+            ) : (
+              <button
+                type="submit"
+                disabled
+                className="p-2 bg-green-600 text-white rounded-lg opacity-75 cursor-not-allowed flex items-center gap-2"
+              >
+                <Image className="w-5 h-5" />
+                Image Uploaded
+              </button>
+            )}
+          </form>
+
+          <form onSubmit={handleChatSubmit} className="flex gap-2 items-center">
             <input
               type="text"
               value={query}
@@ -307,10 +409,10 @@ export default function Assistant() {
               disabled={isLoading}
               className="p-2 bg-red-500 text-white rounded-lg disabled:opacity-50 hover:bg-red-600 transition-colors"
             >
-              <Send className="w-5 h-5 bg-red-500" />
+              <Send className="w-5 h-5" />
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );
