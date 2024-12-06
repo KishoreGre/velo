@@ -14,20 +14,43 @@ import {
   Edit3,
 } from "lucide-react";
 
+interface ChatSession {
+  id: string;
+  name: string;
+  messages: { role: string; content: string }[];
+  sessionId: string | null;
+  interactionsRemaining: number;
+  isImageProcessed: boolean;
+}
+
 export default function Assistant() {
   const [query, setQuery] = useState("");
-  const [messages, setMessages] = useState<
-    { role: "user" | "assistant"; content: string }[]
-  >([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [currentChat, setCurrentChat] = useState<ChatSession | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<"history" | "services">("history");
-  const [chatHistory, setChatHistory] = useState<
-    { id: string; name: string; messages: { role: string; content: string }[] }[]
-  >([]);
+  const [chatHistory, setChatHistory] = useState<ChatSession[]>([]);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [isImageProcessed, setIsImageProcessed] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
+
+  // Initialize first session on mount
+  useEffect(() => {
+    const savedChats = localStorage.getItem("chatHistory");
+    if (savedChats) {
+      const parsedChats = JSON.parse(savedChats);
+      setChatHistory(parsedChats);
+      
+      // If no chat exists, start a new one
+      if (parsedChats.length === 0) {
+        startNewChat();
+      } else {
+        // Load the most recent chat
+        setCurrentChat(parsedChats[parsedChats.length - 1]);
+      }
+    } else {
+      startNewChat();
+    }
+  }, []);
 
   // Scroll to bottom when messages change
   const scrollToBottom = () => {
@@ -36,162 +59,52 @@ export default function Assistant() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [currentChat?.messages]);
 
-  // Load chat history on mount
-  useEffect(() => {
-    const savedChats = localStorage.getItem("chatHistory");
-    if (savedChats) {
-      setChatHistory(JSON.parse(savedChats));
-    }
-    const savedMessages = localStorage.getItem("messages");
-    if (savedMessages) {
-      setMessages(JSON.parse(savedMessages));
-    }
-  }, []);
-
-  // Save chat history whenever it changes
-  useEffect(() => {
-    localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
-  }, [chatHistory]);
-  // Save messages whenever they change
-  useEffect(() => {
-    localStorage.setItem("messages", JSON.stringify(messages));
-  }, [messages]);
-
-  // Handle Image Selection
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0] && !isImageProcessed) {
-      setSelectedImage(e.target.files[0]);
-    }
-  };
-
-  // Handle Image Upload
-  const handleImageUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedImage) return;
-
-    const formData = new FormData();
-    formData.append("image", selectedImage);
-
+  // Start a new chat session
+  const startNewChat = async () => {
     try {
-      const imageResponse = await fetch("https://8962-49-206-119-172.ngrok-free.app/upload_image", {
-        method: "POST",
-        body: formData,
+      const sessionResponse = await fetch("http://127.0.0.1:4000/start_session", {
+        method: "GET",
       });
-
-      if (!imageResponse.ok) {
-        throw new Error(`Image upload failed with status: ${imageResponse.status}`);
-      }
-      // TODO: Get the image and prcess later in the frontend if needed.
-      // const imageData = await imageResponse.json();
-
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Image uploaded and processed successfully." },
-      ]);
-      setIsImageProcessed(true);
-    } catch (error) {
-      console.error("Image Upload Error:", error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "Sorry, there was an error uploading your image.",
-        },
-      ]);
-    }
-  };
-
-  // Handle Chat Submission
-  const handleChatSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
-
-    type Payload = {
-      user_answer: string;
-    };
-    
-    const payload: Payload = {
-      user_answer: query,
-    };
-    
-    setMessages((prev) => [...prev, { role: "user", content: query }]);
-    setQuery("");
-
-    setIsLoading(true);
-
-    try {
-      const response = await fetch("https://8962-49-206-119-172.ngrok-free.app/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
       
-      // Handle bot question
-      if (data.bot_question) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.bot_question },
-        ]);
+      if (!sessionResponse.ok) {
+        throw new Error(`HTTP error! status: ${sessionResponse.status}`);
       }
 
-      // Handle final response
-      if (data.response) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.response },
-        ]);
-      }
+      const sessionData = await sessionResponse.json();
+      
+      const newChat: ChatSession = {
+        id: Date.now().toString(),
+        name: `Chat ${chatHistory.length + 1}`,
+        messages: [],
+        sessionId: sessionData.session_id,
+        interactionsRemaining: 5,
+        isImageProcessed: false
+      };
+
+      setChatHistory(prev => [...prev, newChat]);
+      setCurrentChat(newChat);
+      setSelectedImage(null);
     } catch (error) {
-      console.error("Error:", error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "Sorry, there was an error processing your request.",
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
+      console.error("Error starting new chat:", error);
     }
   };
 
-  const startNewChat = () => {
-    if (messages.length > 0) {
-      const chatName = `Chat ${chatHistory.length + 1}`;
-      setChatHistory((prev) => [
-        ...prev,
-        { id: Date.now().toString(), name: chatName, messages },
-      ]);
-    }
-    setMessages([]);
-    setQuery("");
-    setSelectedImage(null);
-    setIsImageProcessed(false);
-  };
-
+  // Load a specific chat
   const loadChat = (id: string) => {
-    const chat = chatHistory.find((chat) => chat.id === id);
+    const chat = chatHistory.find(c => c.id === id);
     if (chat) {
-      const validMessages = chat.messages.map((message) => ({
-        role: message.role as "user" | "assistant",
-        content: message.content,
-      }));
-      setMessages(validMessages);
+      setCurrentChat(chat);
     }
   };
 
+  // Delete a specific chat
   const deleteChat = (id: string) => {
     setChatHistory((prev) => prev.filter((chat) => chat.id !== id));
   };
 
+  // Rename a specific chat
   const renameChat = (id: string) => {
     const newName = prompt("Enter a new name for this chat:");
     if (newName) {
@@ -202,6 +115,135 @@ export default function Assistant() {
       );
     }
   };
+
+  // Handle Image Selection
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0] && !currentChat?.isImageProcessed) {
+      setSelectedImage(e.target.files[0]);
+    }
+  };
+
+  // Handle Image Upload
+  const handleImageUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedImage || !currentChat?.sessionId) return;
+
+    const formData = new FormData();
+    formData.append("image", selectedImage);
+
+    try {
+      const imageResponse = await fetch(`http://127.0.0.1:4000/upload_image/${currentChat.sessionId}`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!imageResponse.ok) {
+        throw new Error(`Image upload failed with status: ${imageResponse.status}`);
+      }
+
+      const imageData = await imageResponse.json();
+
+      const updatedChat: ChatSession = {
+        ...currentChat,
+        messages: [
+          ...currentChat.messages,
+          { role: "assistant", content: imageData.message || "Image uploaded and processed successfully." }
+        ],
+        isImageProcessed: true
+      };
+
+      setCurrentChat(updatedChat);
+      setChatHistory(prev => 
+        prev.map(chat => chat.id === updatedChat.id ? updatedChat : chat)
+      );
+    } catch (error) {
+      console.error("Image Upload Error:", error);
+      const updatedChat: ChatSession = {
+        ...currentChat,
+        messages: [
+          ...currentChat.messages,
+          { role: "assistant", content: "Sorry, there was an error uploading your image." }
+        ]
+      };
+      setCurrentChat(updatedChat);
+    }
+  };
+
+  // Handle chat submission
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim() || !currentChat?.sessionId) return;
+
+    // Update current chat's messages
+    const updatedChat: ChatSession = {
+      ...currentChat,
+      messages: [...currentChat.messages, { role: "user", content: query }]
+    };
+    setCurrentChat(updatedChat);
+    setQuery("");
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`http://127.0.0.1:4000/chat/${currentChat.sessionId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_answer: query }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Update chat with new messages and session details
+      const finalUpdatedChat: ChatSession = {
+        ...updatedChat,
+        messages: [
+          ...updatedChat.messages,
+          { role: "assistant", content: data.bot_question || data.response }
+        ],
+        interactionsRemaining: data.interactions_remaining || updatedChat.interactionsRemaining
+      };
+
+      setCurrentChat(finalUpdatedChat);
+
+      // Update chat history
+      setChatHistory(prev => 
+        prev.map(chat => chat.id === finalUpdatedChat.id ? finalUpdatedChat : chat)
+      );
+
+      // Handle final response and session reset
+      if (data.is_final) {
+        const finalChat: ChatSession = {
+        ...finalUpdatedChat,
+        messages: [
+          ...finalUpdatedChat.messages,
+          { role: "assistant", content: "This interaction has ended. Start a new chat to continue." }
+        ]
+      };
+      setCurrentChat(finalChat);
+    }
+      
+    } catch (error) { 
+      console.error("Chat submission error:", error);
+      const errorChat: ChatSession = {
+        ...currentChat,
+        messages: [
+          ...currentChat.messages,
+          { role: "assistant", content: "Sorry, there was an error processing your request." }
+        ]
+      };
+      setCurrentChat(errorChat);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Save chat history to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
+  }, [chatHistory]);
 
   return (
     <div className="flex h-screen bg-black-50">
@@ -318,7 +360,7 @@ export default function Assistant() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map((message, index) => (
+          {currentChat?.messages.map((message, index) => (
             <div
               key={index}
               className={`flex ${
@@ -342,19 +384,22 @@ export default function Assistant() {
           ))}
           {isLoading && (
             <div className="flex justify-start items-center space-x-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-red"></div>
-            <div className="bg-black shadow-sm border rounded-lg p-3 text-white">
-              Let&apos;s Go..
+              <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-red"></div>
+              <div className="bg-black shadow-sm border rounded-lg p-3 text-white">
+                Let&apos;s Go..
+              </div>
             </div>
-
-          </div>
           )}
           <div ref={messagesEndRef} />
+          {/* Interactions remaining indicator */}
+          <div className="text-sm text-gray-500 text-center">
+            Interactions Remaining: {currentChat?.interactionsRemaining || 0}
+          </div>
         </div>
 
         <div className="p-4 bg-black border-t flex flex-col gap-4">
           <form onSubmit={handleImageUpload} className="flex gap-2 items-center">
-          {!isImageProcessed ? (
+            {!currentChat?.isImageProcessed ? (
               <>
                 <input
                   type="file"
@@ -397,21 +442,21 @@ export default function Assistant() {
           </form>
 
           <form onSubmit={handleChatSubmit} className="flex gap-2 items-center">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ask about your vehicle..."
-              className="flex-1 p-2 border rounded-lg focus:outline-none focus:border-black-500 text-black"
-            />
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="p-2 bg-red-500 text-white rounded-lg disabled:opacity-50 hover:bg-red-600 transition-colors"
-            >
-              <Send className="w-5 h-5" />
-            </button>
-          </form>
+  <input
+    type="text"
+    value={query}
+    onChange={(e) => setQuery(e.target.value)}
+    placeholder="Ask about your vehicle..."
+    className="flex-1 p-2 border rounded-lg focus:outline-none focus:border-black-500 text-black"
+  />
+  <button
+    type="submit"
+    disabled={isLoading}
+    className="p-2 bg-red-500 text-white rounded-lg disabled:opacity-50 hover:bg-red-600 transition-colors"
+  >
+    <Send className="w-5 h-5" />
+  </button>
+</form>
         </div>
       </div>
     </div>
