@@ -61,19 +61,21 @@ export default function Assistant() {
     scrollToBottom();
   }, [currentChat?.messages]);
 
-  // Start a new chat session
   const startNewChat = async () => {
     try {
       const sessionResponse = await fetch("https://quick-arachnid-infinitely.ngrok-free.app/start_session", {
         method: "GET",
+        headers: {
+          'ngrok-skip-browser-warning': 'true'  // Add this header to bypass the warning
+        }
       });
-      
+  
       if (!sessionResponse.ok) {
         throw new Error(`HTTP error! status: ${sessionResponse.status}`);
       }
-
+  
       const sessionData = await sessionResponse.json();
-      
+  
       const newChat: ChatSession = {
         id: Date.now().toString(),
         name: `Chat ${chatHistory.length + 1}`,
@@ -82,14 +84,14 @@ export default function Assistant() {
         interactionsRemaining: 5,
         isImageProcessed: false
       };
-
+  
       setChatHistory(prev => [...prev, newChat]);
       setCurrentChat(newChat);
-      setSelectedImage(null);
     } catch (error) {
       console.error("Error starting new chat:", error);
     }
-  };
+  };  
+  
 
   // Load a specific chat
   const loadChat = (id: string) => {
